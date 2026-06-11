@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chibimaris: Doramas Onl</title>
+    <style>
+        :root {
+            /* Colores oficiales estilo Crunchyroll / Chibimaris */
+            --orange-crunchy: #f47521;
+            --orange-hover: #ff8a3d;
+            --orange-glow: rgba(244, 117, 33, 0.6);
+            --bg-dark: #0b0c0e;
+            --bg-card: #141519;
+            --bg-sidebar: rgba(20, 21, 25, 0.98);
+            --text-main: #f8fafc;
+            --text-muted: #a1a1aa;
+        }
+        html, body { background-color: var(--bg-dark); color: var(--text-main); font-family: sans-serif; margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
+        
+        .panel-container { display: none; flex-direction: column; align-items: center; padding: 40px 20px; height: 100%; overflow-y: auto; box-sizing: border-box; }
+        .card { width: 100%; max-width: 700px; background-color: var(--bg-card); padding: 30px; border-radius: 4px; border: 1px solid #23252b; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        h1 { color: var(--orange-crunchy); margin-top: 0; text-transform: uppercase; font-size: 24px; letter-spacing: 1px; }
+        h1 span { color: #fff; }
+        textarea { width: 100%; height: 220px; background-color: var(--bg-dark); color: #fff; border: 1px solid #23252b; border-radius: 4px; padding: 12px; box-sizing: border-box; font-family: monospace; font-size: 13px; resize: none; }
+        button { width: 100%; background-color: var(--orange-crunchy); color: #fff; border: none; padding: 14px; font-size: 16px; font-weight: bold; text-transform: uppercase; border-radius: 4px; cursor: pointer; margin-top: 15px; transition: 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); }
+        button:hover { background-color: var(--orange-hover); box-shadow: 0 0 15px var(--orange-glow); }
+        .result-box { margin-top: 25px; background: var(--bg-dark); padding: 20px; border-left: 4px solid var(--orange-crunchy); display: none; }
+        .output-title { font-size: 14px; color: #fff; font-weight: bold; display: block; margin-top: 15px; }
+        
+        .output-link { background: #141519; padding: 12px; border: 1px solid #23252b; color: var(--text-main); font-size: 13px; word-break: break-all; margin-top: 5px; border-radius: 4px; font-family: monospace; user-select: all; white-space: pre-wrap; line-height: 1.5; max-height: 300px; overflow-y: auto; }
+        .output-link span.link-color { color: var(--orange-crunchy); }
+
+        .btn-copy { background-color: #23252b; border: 1px solid #2d2e33; color: #fff; margin-top: 10px; padding: 10px; font-size: 13px; }
+        .btn-copy:hover { background-color: #2e3039; }
+
+        /* REPRODUCTOR TOTALMENTE INMERSIVO (100% PANTALLA) */
+        .player-mode { width: 100vw; height: 100vh; display: none; background: #000; position: relative; }
+        
+        .video-wrapper { width: 100%; height: 100%; position: relative; background: #000; z-index: 1; }
+        iframe { width: 100%; height: 100%; border: none; display: block; background: #000; }
+        
+        /* WATERMARK / MARCA DE AGUA ESTILO CRUNCHYROLL */
+        .player-watermark { position: absolute; top: 20px; right: 20px; font-size: 16px; font-weight: 900; letter-spacing: 1.5px; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.8); z-index: 10; font-family: 'Arial Black', sans-serif; pointer-events: none; text-transform: uppercase; }
+        .player-watermark span { color: var(--orange-crunchy); animation: glowPulse 2s infinite alternate; }
+
+        /* BOTÓN FLOTANTE LATERAL CON ANIMACIÓN Y BRILLO */
+        .floating-menu-container { position: absolute; top: 50%; left: 0; transform: translateY(-50%); z-index: 10; display: flex; align-items: center; }
+        
+        .floating-trigger-btn { background: var(--orange-crunchy); color: #fff; border: none; width: 46px; height: 54px; border-radius: 0 30px 30px 0; cursor: pointer; display: flex; align-items: center; justify-content: center; position: relative; box-shadow: 4px 0 15px var(--orange-glow); transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); padding-right: 4px; animation: buttonPulse 2.5s infinite; }
+        .floating-trigger-btn:hover { background: var(--orange-hover); box-shadow: 6px 0 20px var(--orange-crunchy); transform: scaleX(1.08); animation-play-state: paused; }
+        
+        /* Icono de flecha geométrica animada */
+        .arrow-icon { width: 0; height: 0; border-top: 7px solid transparent; border-bottom: 7px solid transparent; border-left: 9px solid #fff; transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); }
+        .floating-menu-container.open .arrow-icon { transform: rotate(180deg); }
+
+        /* Globo indicador numérico con cantidad de servidores */
+        .server-badge { position: absolute; top: -6px; right: -4px; background: #fff; color: #000; font-size: 11px; font-weight: 900; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--orange-crunchy); box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+
+        /* PANEL DESPLEGABLE LATERAL */
+        .server-sidebar { position: absolute; top: 0; left: -270px; width: 250px; height: 100%; background: var(--bg-sidebar); border-right: 2px solid var(--orange-crunchy); box-shadow: 10px 0 30px rgba(0,0,0,0.8); z-index: 9; transition: left 0.4s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column; padding: 25px 15px; box-sizing: border-box; backdrop-filter: blur(5px); }
+        .server-sidebar.show { left: 0; }
+        
+        .sidebar-title { font-size: 13px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; border-bottom: 1px solid #23252b; padding-bottom: 8px; }
+        .sidebar-list { flex: 1; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+        
+        /* Botones de servidores con diseño de Brillo e Interacción */
+        .server-btn { width: 100%; text-align: left; background: #141519; color: #fff; border: 1px solid #23252b; padding: 14px 16px; font-size: 13px; font-weight: bold; cursor: pointer; text-transform: uppercase; border-radius: 4px; transition: all 0.25s ease; position: relative; overflow: hidden; }
+        .server-btn:hover { background: #1f2026; border-color: var(--orange-hover); color: var(--orange-hover); box-shadow: 0 0 10px rgba(244, 117, 33, 0.2); padding-left: 22px; }
+        
+        /* Servidor activo con Brillo Intenso permanente */
+        .server-btn.active { background: var(--orange-crunchy); border-color: var(--orange-crunchy); color: #fff; box-shadow: 0 0 15px var(--orange-glow); padding-left: 22px; }
+        .server-btn.active::before { content: ''; position: absolute; left: 8px; top: 50%; transform: translateY(-50%); width: 6px; height: 6px; background: #fff; border-radius: 50%; box-shadow: 0 0 8px #fff; }
+
+        /* ==========================================================================
+           NUEVO REPRODUCTOR MP4 PREMIUM CUSTOMIZADO (ESTILO SCREENSHOT)
+           ========================================================================== */
+        .mp4-player-container { display: none; width: 100%; height: 100%; position: relative; background: #000; overflow: hidden; }
+        .mp4-player-container video { width: 100%; height: 100%; object-fit: contain; }
+        
+        /* Botón de Play Gigante Central */
+        .mp4-center-play-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85px; height: 85px; background: var(--orange-crunchy); border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 0 30px rgba(244, 117, 33, 0.7); z-index: 5; transition: all 0.3s ease; }
+        .mp4-center-play-btn:hover { background: var(--orange-hover); transform: translate(-50%, -50%) scale(1.1); box-shadow: 0 0 45px var(--orange-crunchy); }
+        .mp4-center-play-btn svg { width: 35px; height: 35px; fill: #fff; margin-left: 6px; }
+
+        /* Barra de Controles Inferiores */
+        .mp4-controls { position: absolute; bottom: 0; left: 0; width: 100%; background: linear-gradient(transparent, rgba(0,0,0,0.85)); padding: 25px 20px 20px 20px; box-sizing: border-box; display: flex; align-items: center; gap: 15px; z-index: 5; opacity: 1; transition: opacity 0.4s ease; }
+        .mp4-player-container.hide-ui .mp4-controls,
+        .mp4-player-container.hide-ui .mp4-center-play-btn { opacity: 0; pointer-events: none; }
+
+        /* Botones de Control */
+        .mp4-ctrl-btn { background: none; border: none; cursor: pointer; padding: 5px; display: flex; align-items: center; justify-content: center; width: auto; margin: 0; }
+        .mp4-ctrl-btn svg { width: 28px; height: 28px; fill: #fff; transition: fill 0.2s; }
+        .mp4-ctrl-btn:hover svg { fill: var(--orange-crunchy); }
+        
+        /* Barra de Progreso Avanzada */
+        .mp4-progress-container { flex: 1; position: relative; height: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; cursor: pointer; display: flex; align-items: center; }
+        .mp4-progress-bar { height: 100%; background: var(--orange-crunchy); width: 0%; border-radius: 4px; position: relative; }
+        .mp4-progress-handle { position: absolute; right: -6px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; background: #fff; border-radius: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.5); }
+
+        /* Tiempo Restante Centrado */
+        .mp4-time-display { font-family: monospace; font-size: 15px; font-weight: bold; color: #fff; white-space: nowrap; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+
+        /* Fin de Estilos MP4 Custom */
+
+        @keyframes glowPulse {
+            from { text-shadow: 0 0 4px rgba(244,117,33,0.4); }
+            to { text-shadow: 0 0 12px var(--orange-crunchy), 0 0 20px var(--orange-crunchy); }
+        }
+        @keyframes buttonPulse {
+            0% { box-shadow: 4px 0 12px var(--orange-glow); }
+            50% { box-shadow: 6px 0 20px rgba(244, 117, 33, 0.8); }
+            100% { box-shadow: 4px 0 12px var(--orange-glow); }
+        }
+
+        .custom-alert-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 999999; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; }
+        .custom-alert-overlay.active { opacity: 1; pointer-events: auto; }
+        .custom-alert-box { background: var(--bg-card); border: 2px solid var(--orange-crunchy); border-radius: 8px; width: 88%; max-width: 380px; padding: 25px; box-sizing: border-box; text-align: center; box-shadow: 0 15px 35px rgba(0,0,0,0.8); transform: scale(0.85); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .custom-alert-overlay.active .custom-alert-box { transform: scale(1); }
+        .custom-alert-title { color: var(--orange-crunchy); font-size: 19px; font-weight: bold; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+        .custom-alert-msg { color: var(--text-main); font-size: 14px; line-height: 1.5; margin-bottom: 22px; }
+        .custom-alert-btn { background: var(--orange-crunchy); color: #fff; border: none; padding: 11px 30px; font-weight: bold; border-radius: 4px; cursor: pointer; text-transform: uppercase; font-size: 13px; }
+    </style>
+</head>
+<body>
+
+<div id="viewGenerador" class="panel-container">
+    <div class="card">
+        <h1>Chibimaris: <span>Doramas Onl</span></h1>
+        <p style="color: var(--text-muted); margin-top:-10px; font-size:14px;">Conversor Avanzado para Reproductores Multimedia.</p>
+        <textarea id="rawInput" placeholder="Pega tus episodios aquí... Acepta formato estándar o listas de enlaces de capítulos organizados."></textarea>
+        <button id="btnProcesar" onclick="procesarMasivo()">Generar Enlaces Integrados</button>
+        
+        <div id="resultArea" class="result-box">
+            <span class="output-title">📱 Enlaces procesados para el Reproductor Dinámico:</span>
+            <div id="linkOutput" class="output-link"></div>
+            <button class="btn-copy" onclick="copiarAlPortapapeles()">📋 Copiar Todo el Bloque Procesado</button>
+        </div>
+    </div>
+</div>
+
+<div id="viewReproductor" class="player-mode">
+    <div class="player-watermark">Chibimaris<span>.</span></div>
+    
+    <div id="floatingContainer" class="floating-menu-container">
+        <button class="floating-trigger-btn" onclick="toggleMenuFlotante(event)">
+            <div class="arrow-icon"></div>
+            <div id="serverBadgeCount" class="server-badge">0</div>
+        </button>
+    </div>
+
+    <div id="serverSidebar" class="server-sidebar">
+        <div id="sidebarTitle" class="sidebar-title">OPCIONES DE REPRODUCCIÓN</div>
+        <div id="sidebarList" class="sidebar-list"></div>
+    </div>
+    
+    <div id="videoContainer" class="video-wrapper">
+        <iframe id="protectedPlayer" 
+                allowfullscreen 
+                scrolling="no"
+                allow="autoplay; encrypted-media; picture-in-picture;"
+                loading="lazy"
+                referrerpolicy="no-referrer">
+        </iframe>
+    </div>
+
+    <div id="mp4VideoContainer" class="mp4-player-container">
+        <video id="customNativePlayer" playsinline></video>
+        
+        <div class="mp4-center-play-btn" id="mp4CenterPlay" onclick="togglePlayMP4()">
+            <svg id="mp4CenterIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        </div>
+
+        <div class="mp4-controls">
+            <button class="mp4-ctrl-btn" onclick="togglePlayMP4()">
+                <svg id="mp4PlayIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+            
+            <div class="mp4-progress-container" id="mp4ProgressContainer">
+                <div class="mp4-progress-bar" id="mp4ProgressBar">
+                    <div class="mp4-progress-handle"></div>
+                </div>
+            </div>
+
+            <div class="mp4-time-display" id="mp4TimeDisplay">-00:00</div>
+
+            <button class="mp4-ctrl-btn" onclick="toggleMuteMP4()">
+                <svg id="mp4VolumeIcon" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+            </button>
+
+            <button class="mp4-ctrl-btn" onclick="toggleFullscreenMP4()">
+                <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="customAlert" class="custom-alert-overlay">
+    <div class="custom-alert-box">
+        <div class="custom-alert-title">Chibimaris</div>
+        <div id="alertMessage" class="custom-alert-msg"></div>
+        <button class="custom-alert-btn" onclick="cerrarAlerta()">Aceptar</button>
+    </div>
+</div>
+
+<script>
+    let textoResultadoGlobal = "";
+    // Tu enlace extractor directo en Render conectado de forma nativa al parseador
+    const apiRenderUrl = "https://chibimaris-extractor.onrender.com/api/extract?url=";
+
+    function chibimarisAviso(mensaje) {
+        document.getElementById('alertMessage').innerText = mensaje;
+        document.getElementById('customAlert').classList.add('active');
+    }
+
+    function cerrarAlerta() {
+        document.getElementById('customAlert').classList.remove('active');
+    }
+
+    function encriptarDatos(cadena) {
+        return btoa(encodeURIComponent(cadena).replace(/%([0-9A-F]{2})/g, function(match, p1) {
+            return String.fromCharCode('0x' + p1);
+        }));
+    }
+
+    function desencriptarDatos(cadena) {
+        try {
+            return decodeURIComponent(atob(cadena).split('').map(function(c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+        } catch(e) {
+            return decodeURIComponent(cadena); 
+        }
+    }
+
+    function toggleMenuFlotante(event) {
+        if(event) event.stopPropagation();
+        document.getElementById('floatingContainer').classList.toggle('open');
+        document.getElementById('serverSidebar').classList.toggle('show');
+    }
+
+    window.addEventListener('click', function(e) {
+        const sidebar = document.getElementById('serverSidebar');
+        const container = document.getElementById('floatingContainer');
+        if (sidebar && sidebar.classList.contains('show') && !sidebar.contains(e.target) && !container.contains(e.target)) {
+            container.classList.remove('open');
+            sidebar.classList.remove('show');
+        }
+    });
+
+    // NUEVA FUNCIÓN ASÍNCRONA: Extrae streams en tiempo real desde la URL de la página fuente
+    async function procesarMasivo() {
+        const textoCompleto = document.getElementById('rawInput').value.trim();
+        if(!textoCompleto) return chibimarisAviso("⚠️ Por favor, pega tus bloques de episodios.");
+
+        const btn = document.getElementById('btnProcesar');
+        btn.innerText = "⏳ EXTRAENDO VIDEOS DE LAS PÁGINAS...";
+        btn.disabled = true;
+
+        let resultadosTexto = [];
+        let resultadosHTML = [];
+        let urlBase = window.location.href.split('?')[0];
+
+        // Separar el cuadro de texto oscuro por bloques estándar tradicionales
+        const bloques = textoCompleto.split(/(====*\s*(?:EPISODIO|CAPITULO|CAP|EP)\s*\d+\s*====*|====*\s*OPCIONES\s*====*)/i);
+        if (bloques.length < 2) {
+            btn.innerText = "Generar Enlaces Integrados";
+            btn.disabled = false;
+            return chibimarisAviso("❌ Formato no reconocido. Asegúrate de usar '=== EPISODIO 1 ==='");
+        }
+
+        for (let i = 1; i < bloques.length; i += 2) {
+            let encabezadoOriginal = bloques[i].trim();
+            let contenidoEpisodio = bloques[i + 1];
+            if (!contenidoEpisodio) continue;
+
+            let tipoContenido = "serie";
+            let numeroEp = "1";
+            let tituloEstandar = "";
+
+            if (encabezadoOriginal.toUpperCase().includes("OPCIONES")) {
+                tipoContenido = "pelicula";
+                tituloEstandar = "=== OPCIONES ===";
+            } else {
+                const matchNumero = encabezadoOriginal.match(/\d+/);
+                numeroEp = matchNumero ? matchNumero[0] : "1";
+                tituloEstandar = `=== EPISODIO ${numeroEp} ===`;
+            }
+
+            // Extraer la URL de la página fuente (peliculaplay, etc) pegada en el bloque
+            let matchUrlPagina = contenidoEpisodio.match(/https?:\/\/[^\s"'\n]+/i);
+            
+            if (matchUrlPagina) {
+                let urlPaginaCapitulo = matchUrlPagina[0].trim();
+                let servidoresEncontrados = [];
+
+                try {
+                    // Llamamos a tu servidor en Render para que "espíe" la página y extraiga el video directo
+                    const response = await fetch(`${apiRenderUrl}${encodeURIComponent(urlPaginaCapitulo)}`);
+                    const data = await response.json();
+
+                    if(data.success && data.source) {
+                        // Empaquetamos la respuesta limpia del streaming (MP4 / HLS) en tu estructura original
+                        servidoresEncontrados.push(`CHIBIMARIS PREMIUM|${data.source}`);
+                    }
+                } catch (err) {
+                    console.error("Error consultando el extractor de Render para la URL:", urlPaginaCapitulo);
+                }
+
+                // Si falló el extractor, metemos la URL original como fallback de escape
+                if(servidoresEncontrados.length === 0) {
+                    servidoresEncontrados.push(`FUENTE ORIGINAL|${urlPaginaCapitulo}`);
+                }
+
+                let idIdentificador = (tipoContenido === "pelicula") ? "MOVIE" : numeroEp;
+                let stringData = idIdentificador + "||" + servidoresEncontrados.join(',');
+                let dataProtegida = encriptarDatos(stringData);
+                let urlFinal = `${urlBase}?videos=${dataProtegida}`;
+
+                resultadosTexto.push(`${tituloEstandar}\n\n🎬 VIDEOS:\n[Chibimaris]\n${urlFinal}`);
+                resultadosHTML.push(`${tituloEstandar}\n\n🎬 VIDEOS:\n[Chibimaris]\n<span class="link-color">${urlFinal}</span>`);
+            }
+        }
+
+        btn.innerText = "Generar Enlaces Integrados";
+        btn.disabled = false;
+
+        if(resultadosTexto.length === 0) return chibimarisAviso("⚠️ No se pudieron extraer videos válidos.");
+        
+        document.getElementById('linkOutput').innerHTML = resultadosHTML.join("\n\n");
+        textoResultadoGlobal = resultadosTexto.join("\n\n");
+        document.getElementById('resultArea').style.display = 'block';
+    }
+
+    function copiarAlPortapapeles() {
+        if(!textoResultadoGlobal) return;
+        navigator.clipboard.writeText(textoResultadoGlobal).then(() => {
+            chibimarisAviso("📋 Enlaces copiados al portapapeles.");
+        });
+    }
+
+    let servidoresLista = [];
+    let indiceActual = 0;
+
+    window.addEventListener('DOMContentLoaded', () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const videosParam = urlParams.get('videos'); 
+
+        if (videosParam) {
+            document.getElementById('viewGenerador').style.display = 'none';
+            document.getElementById('viewReproductor').style.display = 'block';
+            
+            let dataDesencriptada = desencriptarDatos(videosParam);
+            let identificador = "1";
+            let datosServidores = dataDesencriptada;
+            
+            if(dataDesencriptada.includes("||")) {
+                let partesData = dataDesencriptada.split("||");
+                identificador = partesData[0];
+                datosServidores = partesData[1];
+            }
+            
+            if (identificador === "MOVIE") {
+                document.getElementById('sidebarTitle').innerText = `PELÍCULA - OPCIONES`;
+            } else {
+                document.getElementById('sidebarTitle').innerText = `EPISODIO ${identificador} - OPCIONES`;
+            }
+            
+            let pares = datosServidores.split(',');
+            servidoresLista = pares.map(p => {
+                let partes = p.split('|');
+                return { nombre: partes[0], url: partes[1] };
+            });
+
+            document.getElementById('serverBadgeCount').innerText = servidoresLista.length;
+
+            generarPestañasServidores();
+            if (servidoresLista.length > 0) {
+                cambiarServidor(0);
+            }
+        } else {
+            document.getElementById('viewGenerador').style.display = 'flex';
+        }
+
+        const v = document.getElementById('customNativePlayer');
+        v.addEventListener('timeupdate', actualizarProgresoMP4);
+        v.addEventListener('click', togglePlayMP4);
+
+        let timeoutUI;
+        const mp4Cont = document.getElementById('mp4VideoContainer');
+        mp4Cont.addEventListener('mousemove', () => {
+            mp4Cont.classList.remove('hide-ui');
+            clearTimeout(timeoutUI);
+            if(!v.paused) {
+                timeoutUI = setTimeout(() => mp4Cont.classList.add('hide-ui'), 3000);
+            }
+        });
+    });
+
+    function generarPestañasServidores() {
+        const contenedorLista = document.getElementById('sidebarList');
+        contenedorLista.innerHTML = "";
+        servidoresLista.forEach((servidor, index) => {
+            const boton = document.createElement('button');
+            boton.className = 'server-btn';
+            boton.id = `btn-server-${index}`;
+            boton.innerText = servidor.nombre;
+            boton.onclick = () => {
+                cambiarServidor(index);
+                document.getElementById('floatingContainer').classList.remove('open');
+                document.getElementById('serverSidebar').classList.remove('show');
+            };
+            contenedorLista.appendChild(boton);
+        });
+    }
+
+    function cambiarServidor(index) {
+        indiceActual = index;
+        document.querySelectorAll('.server-btn').forEach(btn => btn.classList.remove('active'));
+        const botonActivo = document.getElementById(`btn-server-${index}`);
+        if (botonActivo) botonActivo.classList.add('active');
+
+        const iframe = document.getElementById('protectedPlayer');
+        const iframeContainer = document.getElementById('videoContainer');
+        const mp4Container = document.getElementById('mp4VideoContainer');
+        const nativePlayer = document.getElementById('customNativePlayer');
+
+        if (servidoresLista[index]) {
+            let urlFinal = servidoresLista[index].url;
+            
+            if(urlFinal.toLowerCase().includes('.mp4') || urlFinal.toLowerCase().includes('.m3u8')) {
+                iframe.src = "about:blank";
+                iframeContainer.style.display = 'none';
+                mp4Container.style.display = 'block';
+                
+                nativePlayer.src = urlFinal;
+                nativePlayer.load();
+                
+                document.getElementById('mp4CenterIcon').innerHTML = '<path d="M8 5v14l11-7z"/>';
+                document.getElementById('mp4PlayIcon').innerHTML = '<path d="M8 5v14l11-7z"/>';
+            } else {
+                mp4Container.style.display = 'none';
+                nativePlayer.pause();
+                iframeContainer.style.display = 'block';
+
+                let nombreLower = servidoresLista[index].nombre.toLowerCase();
+                if ((nombreLower.includes('voe') || urlFinal.includes('voe.sx')) && !urlFinal.includes('/embed/')) {
+                    urlFinal = urlFinal.replace('/e/', '/embed/');
+                }
+                if ((nombreLower.includes('hlswish') || urlFinal.includes('hlswish.com')) && !urlFinal.includes('/embed-')) {
+                    urlFinal = urlFinal.replace('/e/', '/embed-') + '.html';
+                }
+                if ((nombreLower.includes('vimeos') || urlFinal.includes('vimeos.net')) && !urlFinal.includes('/embed-')) {
+                    urlFinal = urlFinal.replace('/v/', '/embed-');
+                }
+                iframe.src = urlFinal;
+            }
+        }
+    }
+
+    function togglePlayMP4() {
+        const v = document.getElementById('customNativePlayer');
+        const cIcon = document.getElementById('mp4CenterIcon');
+        const pIcon = document.getElementById('mp4PlayIcon');
+        
+        if(v.paused) {
+            v.play();
+            cIcon.innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+            pIcon.innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+            setTimeout(() => { document.getElementById('mp4VideoContainer').classList.add('hide-ui'); }, 2000);
+        } else {
+            v.pause();
+            cIcon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+            pIcon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+            document.getElementById('mp4VideoContainer').classList.remove('hide-ui');
+        }
+    }
+
+    function toggleMuteMP4() {
+        const v = document.getElementById('customNativePlayer');
+        const volIcon = document.getElementById('mp4VolumeIcon');
+        v.muted = !v.muted;
+        if(v.muted) {
+            volIcon.innerHTML = '<path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.21.05-.42.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>';
+        } else {
+            volIcon.innerHTML = '<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>';
+        }
+    }
+
+    function toggleFullscreenMP4() {
+        const container = document.getElementById('mp4VideoContainer');
+        if (!document.fullscreenElement) {
+            container.requestFullscreen().catch(err => alert(err.message));
+        } else {
+            document.exitFullscreen();
+        }
+    }
+
+    function actualizarProgresoMP4() {
+        const v = document.getElementById('customNativePlayer');
+        const pBar = document.getElementById('mp4ProgressBar');
+        const tDisplay = document.getElementById('mp4TimeDisplay');
+        
+        if(v.duration) {
+            let porcentaje = (v.currentTime / v.duration) * 100;
+            pBar.style.width = porcentaje + '%';
+            
+            let tiempoRestante = v.duration - v.currentTime;
+            let mins = Math.floor(tiempoRestante / 60);
+            let secs = Math.floor(tiempoRestante % 60);
+            tDisplay.innerText = `-${mins}:${secs < 10 ? '0' + secs : secs}`;
+        }
+    }
+
+    document.getElementById('mp4ProgressContainer').addEventListener('click', function(e) {
+        const v = document.getElementById('customNativePlayer');
+        const contRect = this.getBoundingClientRect();
+        const clickX = e.clientX - contRect.left;
+        const clickPorcentaje = clickX / contRect.width;
+        if(v.duration) {
+            v.currentTime = clickPorcentaje * v.duration;
+        }
+    });
+</script>
+</body>
+</html>
