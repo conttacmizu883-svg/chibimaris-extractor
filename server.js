@@ -1,24 +1,27 @@
 const express = require('express');
 const path = require('path');
+const cors = require('cors');
 const axios = require('axios');
 const cheerio = require('cheerio');
+
 const app = express();
 
+// Configuraciones necesarias
+app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// ESTO ARREGLA EL "CANNOT GET /" -> Le dice al servidor que muestre tu index.html
+// ESTO ELIMINA EL CANNOT GET /
+// Le dice al servidor que busque y cargue tu archivo index.html en la raíz
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Ruta para procesar la extracción de videos
+// Ruta para el extractor
 app.post('/api/extract', async (req, res) => {
     try {
         const { texto } = req.body;
-        if (!texto) {
-            return res.status(400).json({ status: "error", message: "No texto" });
-        }
+        if (!texto) return res.status(400).json({ status: "error", message: "No texto" });
 
         const regexUrl = /(https?:\/\/[^\s]+)/g;
         const enlaces = texto.match(regexUrl) || [];
@@ -52,4 +55,4 @@ app.post('/api/extract', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor en puerto ${PORT}`));
+app.listen(PORT, () => console.log(`Servidor corriendo en puerto ${PORT}`));
