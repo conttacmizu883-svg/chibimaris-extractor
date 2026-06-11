@@ -73,7 +73,7 @@
         .server-btn.active::before { content: ''; position: absolute; left: 8px; top: 50%; transform: translateY(-50%); width: 6px; height: 6px; background: #fff; border-radius: 50%; box-shadow: 0 0 8px #fff; }
 
         /* ==========================================================================
-           NUEVO REPRODUCTOR MP4 PREMIUM CUSTOMIZADO (ESTILO SCREENSHOT)
+           NUEVO REPRODUCTOR MP4 PREMIUM CUSTOMIZADO
            ========================================================================== */
         .mp4-player-container { display: none; width: 100%; height: 100%; position: relative; background: #000; overflow: hidden; }
         .mp4-player-container video { width: 100%; height: 100%; object-fit: contain; }
@@ -100,8 +100,6 @@
 
         /* Tiempo Restante Centrado */
         .mp4-time-display { font-family: monospace; font-size: 15px; font-weight: bold; color: #fff; white-space: nowrap; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
-
-        /* Fin de Estilos MP4 Custom */
 
         @keyframes glowPulse {
             from { text-shadow: 0 0 4px rgba(244,117,33,0.4); }
@@ -426,9 +424,13 @@
         const nativePlayer = document.getElementById('customNativePlayer');
 
         if (servidoresLista[index]) {
-            let urlFinal = servidoresLista[index].url;
+            let urlFinal = servidoresLista[index].url.trim();
             
-            if(urlFinal.toLowerCase().includes('.mp4') || urlFinal.toLowerCase().includes('.m3u8')) {
+            // DETECCIÓN REFORZADA: Si es MP4, HLS (m3u8) o un stream directo
+            const esVideoDirecto = /\.(mp4|m3u8|ts|mov|mkv)$/i.test(urlFinal) || urlFinal.includes('blob:');
+
+            if (esVideoDirecto) {
+                // MODO REPRODUCTOR NATIVO PREMIUM
                 iframe.src = "about:blank";
                 iframeContainer.style.display = 'none';
                 mp4Container.style.display = 'block';
@@ -439,21 +441,42 @@
                 document.getElementById('mp4CenterIcon').innerHTML = '<path d="M8 5v14l11-7z"/>';
                 document.getElementById('mp4PlayIcon').innerHTML = '<path d="M8 5v14l11-7z"/>';
             } else {
+                // MODO IFRAME (Voe, Vimeo, Fuentes Originales, etc.)
                 mp4Container.style.display = 'none';
                 nativePlayer.pause();
                 iframeContainer.style.display = 'block';
 
-                let nombreLower = servidoresLista[index].nombre.toLowerCase();
-                if ((nombreLower.includes('voe') || urlFinal.includes('voe.sx')) && !urlFinal.includes('/embed/')) {
-                    urlFinal = urlFinal.replace('/e/', '/embed/');
+                let urlEmbed = urlFinal;
+                let urlLower = urlFinal.toLowerCase();
+                
+                // 1. Filtro estricto para VOE
+                if (urlLower.includes('voe.sx')) {
+                    if (!urlLower.includes('/embed/')) {
+                        urlEmbed = urlFinal.replace('/e/', '/embed/');
+                        if (!urlEmbed.includes('/embed/')) {
+                            const idVoe = urlFinal.split('/').pop();
+                            urlEmbed = `https://voe.sx/embed/${idVoe}`;
+                        }
+                    }
+                } 
+                // 2. Filtro estricto para VIMEOS
+                else if (urlLower.includes('vimeos.net')) {
+                    if (!urlLower.includes('/embed-')) {
+                        urlEmbed = urlFinal.replace('/v/', '/embed-');
+                    }
                 }
-                if ((nombreLower.includes('hlswish') || urlFinal.includes('hlswish.com')) && !urlFinal.includes('/embed-')) {
-                    urlFinal = urlFinal.replace('/e/', '/embed-') + '.html';
+                // 3. Filtro para HLSWISH u otros servidores de streaming comunes
+                else if (urlLower.includes('hlswish.com') || urlLower.includes('wishembed.com')) {
+                    if (!urlLower.includes('/embed-')) {
+                        urlEmbed = urlFinal.replace('/e/', '/embed-') + '.html';
+                    }
                 }
-                if ((nombreLower.includes('vimeos') || urlFinal.includes('vimeos.net')) && !urlFinal.includes('/embed-')) {
-                    urlFinal = urlFinal.replace('/v/', '/embed-');
-                }
-                iframe.src = urlFinal;
+
+                // Forzar actualización del iframe sin dejar rastro de caché
+                iframe.src = "about:blank";
+                setTimeout(() => {
+                    iframe.src = urlEmbed;
+                }, 50);
             }
         }
     }
