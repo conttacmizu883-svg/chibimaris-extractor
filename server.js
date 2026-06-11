@@ -1,58 +1,94 @@
-const express = require('express');
-const path = require('path');
-const cors = require('cors');
-const axios = require('axios');
-const cheerio = require('cheerio');
+    // NUEVA FUNCIÓN ASÍNCRONA: Extrae streams en tiempo real usando POST hacia Render
+    async function procesarMasivo() {
+        const textoCompleto = document.getElementById('rawInput').value.trim();
+        if(!textoCompleto) return chibimarisAviso("⚠️ Por favor, pega tus bloques de episodios.");
 
-const app = express();
+        const btn = document.getElementById('btnProcesar');
+        btn.innerText = "⏳ EXTRAENDO VIDEOS DE LAS PÁGINAS...";
+        btn.disabled = true;
 
-// Configuraciones necesarias
-app.use(cors());
-app.use(express.json());
-app.use(express.static(__dirname));
+        let resultadosTexto = [];
+        let resultadosHTML = [];
+        let urlBase = window.location.href.split('?')[0];
 
-// ESTO ELIMINA EL CANNOT GET /
-// Le dice al servidor que busque y cargue tu archivo index.html en la raíz
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
+        // Separar el cuadro de texto oscuro por bloques estándar tradicionales
+        const bloques = textoCompleto.split(/(====*\s*(?:EPISODIO|CAPITULO|CAP|EP)\s*\d+\s*====*|====*\s*OPCIONES\s*====*)/i);
+        if (bloques.length < 2) {
+            btn.innerText = "Generar Enlaces Integrados";
+            btn.disabled = false;
+            return chibimarisAviso("❌ Formato no reconocido. Asegúrate de usar '=== EPISODIO 1 ==='");
+        }
 
-// Ruta para el extractor
-app.post('/api/extract', async (req, res) => {
-    try {
-        const { texto } = req.body;
-        if (!texto) return res.status(400).json({ status: "error", message: "No texto" });
+        for (let i = 1; i < bloques.length; i += 2) {
+            let encabezadoOriginal = bloques[i].trim();
+            let contenidoEpisodio = bloques[i + 1];
+            if (!contenidoEpisodio) continue;
 
-        const regexUrl = /(https?:\/\/[^\s]+)/g;
-        const enlaces = texto.match(regexUrl) || [];
-        let resultados = [];
+            let tipoContenido = "serie";
+            let numeroEp = "1";
+            let tituloEstandar = "";
 
-        for (const url of enlaces) {
-            try {
-                const respuestaHtml = await axios.get(url, {
-                    headers: { 'User-Agent': 'Mozilla/5.0' },
-                    timeout: 8000
-                });
-                const $ = cheerio.load(respuestaHtml.data);
-                let videoUrl = '';
+            if (encabezadoOriginal.toUpperCase().includes("OPCIONES")) {
+                tipoContenido = "pelicula";
+                tituloEstandar = "=== OPCIONES ===";
+            } else {
+                const matchNumero = encabezadoOriginal.match(/\d+/);
+                numeroEp = matchNumero ? matchNumero[0] : "1";
+                tituloEstandar = `=== EPISODIO ${numeroEp} ===`;
+            }
 
-                $('iframe').each((i, el) => {
-                    const src = $(el).attr('src');
-                    if (src && (src.includes('embed') || src.includes('player') || src.includes('stream'))) {
-                        videoUrl = src;
+            // Extraer la URL de la página fuente (peliculaplay, etc) pegada en el bloque
+            let matchUrlPagina = contenidoEpisodio.match(/https?:\/\/[^\s"'\n]+/i);
+            
+            if (matchUrlPagina) {
+                let urlPaginaCapitulo = matchUrlPagina[0].trim();
+                let servidoresEncontrados = [];
+
+                try {
+                    // CORRECCIÓN: Enviamos una petición POST con formato JSON compatible con tu server.js
+                    const response = await fetch("https://chibimaris-extractor.onrender.com/api/extract", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ texto: urlPaginaCapitulo })
+                    });
+                    
+                    const data = await response.json();
+
+                    // Adaptamos la lectura de la respuesta que genera Axios + Cheerio
+                    if(data.status === "success" && data.resultados && data.resultados.length > 0) {
+                        data.resultados.forEach(res => {
+                            if (res.stream && res.stream !== "No detectado") {
+                                servidoresEncontrados.push(`CHIBIMARIS PREMIUM|${res.stream}`);
+                            }
+                        });
                     }
-                });
+                } catch (err) {
+                    console.error("Error consultando el extractor de Render para la URL:", urlPaginaCapitulo);
+                }
 
-                resultados.push({ origen: url, stream: videoUrl || "No detectado" });
-            } catch (err) {
-                resultados.push({ origen: url, stream: "Error de conexión" });
+                // Si falló el extractor o no detectó streams directos, metemos la URL original como fallback
+                if(servidoresEncontrados.length === 0) {
+                    servidoresEncontrados.push(`FUENTE ORIGINAL|${urlPaginaCapitulo}`);
+                }
+
+                let idIdentificador = (tipoContenido === "pelicula") ? "MOVIE" : numeroEp;
+                let stringData = idIdentificador + "||" + servidoresEncontrados.join(',');
+                let dataProtegida = encriptarDatos(stringData);
+                let urlFinal = `${urlBase}?videos=${dataProtegida}`;
+
+                resultadosTexto.push(`${tituloEstandar}\n\n🎬 VIDEOS:\n[Chibimaris]\n${urlFinal}`);
+                resultadosHTML.push(`${tituloEstandar}\n\n🎬 VIDEOS:\n[Chibimaris]\n<span class="link-color">${urlFinal}</span>`);
             }
         }
-        res.json({ status: "success", resultados });
-    } catch (error) {
-        res.status(500).json({ status: "error", message: error.message });
-    }
-});
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor corriendo en puerto ${PORT}`));
+        btn.innerText = "Generar Enlaces Integrados";
+        btn.disabled = false;
+
+        if(resultadosTexto.length === 0) return chibimarisAviso("⚠️ No se pudieron extraer videos válidos.");
+        
+        document.getElementById('linkOutput').innerHTML = resultadosHTML.join("\n\n");
+        textoResultadoGlobal = resultadosTexto.join("\n\n");
+        document.getElementById('resultArea').style.display = 'block';
+    }
