@@ -74,7 +74,7 @@
 
         /* ==========================================================================
            NUEVO REPRODUCTOR MP4 PREMIUM CUSTOMIZADO
-           ========================================================================== */
+           ========================================================================= */
         .mp4-player-container { display: none; width: 100%; height: 100%; position: relative; background: #000; overflow: hidden; }
         .mp4-player-container video { width: 100%; height: 100%; object-fit: contain; }
         
@@ -203,8 +203,6 @@
 
 <script>
     let textoResultadoGlobal = "";
-    // Tu enlace extractor directo en Render conectado de forma nativa al parseador
-    const apiRenderUrl = "https://chibimaris-extractor.onrender.com/api/extract?url=";
 
     function chibimarisAviso(mensaje) {
         document.getElementById('alertMessage').innerText = mensaje;
@@ -246,13 +244,13 @@
         }
     });
 
-    // NUEVA FUNCIÓN ASÍNCRONA: Extrae streams en tiempo real desde la URL de la página fuente
+    // NUEVA FUNCIÓN ASÍNCRONA: Extractor directo desde GitHub Pages (Formato Seeker)
     async function procesarMasivo() {
         const textoCompleto = document.getElementById('rawInput').value.trim();
         if(!textoCompleto) return chibimarisAviso("⚠️ Por favor, pega tus bloques de episodios.");
 
         const btn = document.getElementById('btnProcesar');
-        btn.innerText = "⏳ EXTRAENDO VIDEOS DE LAS PÁGINAS...";
+        btn.innerText = "⏳ BUSCANDO VIDEOS EN TIEMPO REAL...";
         btn.disabled = true;
 
         let resultadosTexto = [];
@@ -285,7 +283,7 @@
                 tituloEstandar = `=== EPISODIO ${numeroEp} ===`;
             }
 
-            // Extraer la URL de la página fuente (peliculaplay, etc) pegada en el bloque
+            // Extraer la URL de la página fuente pegada en el bloque
             let matchUrlPagina = contenidoEpisodio.match(/https?:\/\/[^\s"'\n]+/i);
             
             if (matchUrlPagina) {
@@ -293,19 +291,33 @@
                 let servidoresEncontrados = [];
 
                 try {
-                    // Llamamos a tu servidor en Render para que "espíe" la página y extraiga el video directo
-                    const response = await fetch(`${apiRenderUrl}${encodeURIComponent(urlPaginaCapitulo)}`);
+                    // Usamos el puente proxy AllOrigins para leer el código HTML de la página web remota
+                    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(urlPaginaCapitulo)}`;
+                    const response = await fetch(proxyUrl);
                     const data = await response.json();
 
-                    if(data.success && data.source) {
-                        // Empaquetamos la respuesta limpia del streaming (MP4 / HLS) en tu estructura original
-                        servidoresEncontrados.push(`CHIBIMARIS PREMIUM|${data.source}`);
+                    if (data.contents) {
+                        const htmlPlano = data.contents;
+                        
+                        // Buscador geométrico mediante expresiones regulares para rastrear las etiquetas iframe
+                        const regexIframe = /<iframe[^>]+src=["']([^"']+)["']/g;
+                        let match;
+                        
+                        while ((match = regexIframe.exec(htmlPlano)) !== null) {
+                            let srcVideo = match[1];
+                            // Filtrar para capturar únicamente los servidores de reproducción válidos
+                            if (srcVideo.includes('embed') || srcVideo.includes('player') || srcVideo.includes('voe') || srcVideo.includes('stream') || srcVideo.includes('vimeo')) {
+                                if (!servidoresEncontrados.some(s => s.includes(srcVideo))) {
+                                    servidoresEncontrados.push(`CHIBIMARIS PREMIUM|${srcVideo}`);
+                                }
+                            }
+                        }
                     }
                 } catch (err) {
-                    console.error("Error consultando el extractor de Render para la URL:", urlPaginaCapitulo);
+                    console.error("Error en el seeker automático para:", urlPaginaCapitulo);
                 }
 
-                // Si falló el extractor, metemos la URL original como fallback de escape
+                // Fallback de seguridad: si el rastreo no halló iframes o falló, se inserta la URL original
                 if(servidoresEncontrados.length === 0) {
                     servidoresEncontrados.push(`FUENTE ORIGINAL|${urlPaginaCapitulo}`);
                 }
